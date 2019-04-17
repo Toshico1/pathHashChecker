@@ -26,12 +26,30 @@ void writeLogs(QString absPathDir, QStringList list){
             stream << "\r\n";
         stream << absPathDir << "\r\n";
         for(int i = 0; i < list.size(); i++){
-            stream << "---" << list[i] << " NEW " <<QTime::currentTime().toString("HH:mm:ss") << "\r\n";
+            stream << "---" << list[i] << " OLD " <<QTime::currentTime().toString("HH:mm:ss") << "\r\n";
         }
     }else{
         qDebug() << "OSHIBKA 12";
     }
     logfile.close();
+}
+
+void invertFile(QString path){
+    QFile file(path);
+    QStringList strlist;
+    file.open(QIODevice::ReadWrite | QIODevice::Text);
+    while(!file.atEnd()){
+        strlist += file.readLine();
+    }
+    file.close();
+    file.open(QIODevice::Truncate);
+    file.close();
+    file.open(QIODevice::ReadWrite | QIODevice::Text);
+    QTextStream stream(&file);
+    for(int i = strlist.size()-1; i != -1; i--){
+        stream << strlist[i];
+    }
+    file.close();
 }
 
 //Считаем кол-во файлов в папке не рекурсивно
@@ -60,41 +78,77 @@ int valOfFiles(QString path){
  */
 
 
+QFileInfoList filesInDir(QString path){
+    QDir dir(path);
+    dir.setFilter(QDir::Files);
+    QFileInfoList infoList = dir.entryInfoList();
+    return infoList;
+}
+
+QString handlerHashSTR(QString tmp){
+    int i = 0;
+    for(; tmp[i] != ' '; i++){}
+    tmp = tmp.remove(0,i+1);
+    i = 0;
+    for(; tmp[i] != ' '; i++){}
+    tmp = tmp.left(i);
+    return tmp;
+}
+QString handlerPathSTR(QString tmp){
+int i = 0;
+tmp = tmp.remove(0,3);
+for(; tmp[i] != ' '; i++){}
+tmp = tmp.left(i);
+return tmp;
+}
+
 //проводит проверку и создает новые логи для дальнейшей работы этой же функции
 void mainChecker(QString logs){
     //logs = "C:/Users/User/Documents/build-main-Desktop_Qt_5_3_MinGW_32bit-Debug/tmpfile.txt";
-    QFile logfile(logs);
-    logfile.open(QIODevice::ReadOnly);
-    //QTextStream *stream = new QTextStream(&logfile);
-    QString tmp;
-    QFile tmpfile("tmpfile.txt");//новый лог файл
-    tmpfile.open(QIODevice::ReadWrite | QIODevice::Text);
-    QTextStream *stream = new QTextStream(&tmpfile);
-    //*stream << tmp;
-    while(!logfile.atEnd()){
-        //qDebug() << tmp;
-        tmp = logfile.readLine();
-        if(tmp.left(3) != "---"){
-            *stream << tmp;
-        }else{
-            int i = 0;
-            for(; tmp.at(i) != ' ';i++){}
-            QString vrempath = tmp.left(i); //обрезать в пути ---
-            vrempath.remove(0,3);
-            *stream << "---" << vrempath << " ";
-            QByteArray realHash = fileChecksum(vrempath);//берем хэш нашего файла (по пути)
-            bool triger = tmp.contains(realHash.toHex());
-            *stream << realHash.toHex() << " ";
-            if(!triger){
-                *stream << "EDITED ";
-            }else{
-                *stream << "OLD ";
+    QFile oldLogFile(logs);
+    oldLogFile.open(QIODevice::ReadOnly);
+    QFile newLogFile("tmpfile.txt");//новый лог файл
+    newLogFile.open(QIODevice::ReadWrite | QIODevice::Text);
+    QTextStream newStream(&newLogFile);
+    QTextStream oldStream(&oldLogFile);
+    QString str;
+    QStringList listOfFiles; //как то подчищать его
+    while(!oldLogFile.atEnd()){
+        str = oldLogFile.readLine();
+        if(str != "\r\r\n" && str != "\r\n" && str != "\n"){
+            if(str.contains("---")){
+                QString tmp = str;
+                listOfFiles += tmp;
+            }else{//попали в папку
+                int i = 0;
+                for(; str[i]!='\r'; i++){}
+                str = str.left(i);
+                QFileInfoList list = filesInDir(str); //функция принимающая path dir и возвращающая QList!!!ДОПИСАТЬ РЕКУРСИВНЫЙ ЗАНОС НОВЫХ ПАПОК!!!
+                for(int i = 0; i < listOfFiles.size(); i++){ //перебираем из лог.txt в dirInfo
+                    bool triger = true;
+                    if(triger){
+                        triger = false;
+                        for(int j = 0; j < list.size(); j++){
+                            if(handlerPathSTR(listOfFiles[i]) == list[j].absoluteFilePath()){//сравниваем пути
+                                if(handlerHashSTR(listOfFiles[i]) == fileChecksum(list[j].absoluteFilePath()).toHex()){//сравниваем хэши
+                                    newStream << "---" << handlerPathSTR(listOfFiles[i]) << " " << handlerHashSTR(listOfFiles[i]) <<
+                                                 " OLD " << QTime::currentTime().toString("HH:mm:ss") << "\r\n";
+                                    triger = true;
+                                    break;
+                                }else{
+                                    newStream << "---" << handlerPathSTR(listOfFiles[i]) << " " << handlerHashSTR(listOfFiles[i]) <<
+                                                 " EDITED " << QTime::currentTime().toString("HH:mm:ss") << "\r\n";
+                                    triger = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }else{}
+                }
+                newStream << str << "\r\r\n";
             }
-            *stream << QTime::currentTime().toString("HH:mm:ss") << "\r\n";
-        }
+        }else{newStream << str;}
     }
-    logfile.close();
-    tmpfile.close();
 
 }
 
@@ -114,7 +168,7 @@ void recursDir(QString dirS){
             fileList += " ";
         }
         if(list.at(i).isDir()){ //вызываем рекурсию для перебора dir
-            absDirList += list.at(i).absoluteFilePath(); //сохраняем abs папки
+            absDirList += list.at(i).absoluteFilePath(); //сохраняем abs папки(не нужно)
             dir.cd(list.at(i).absoluteFilePath());       //двигаемся глубже и вызываем рекурсию
             recursDir(list.at(i).absoluteFilePath());
         }else{

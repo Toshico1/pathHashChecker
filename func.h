@@ -13,5 +13,5 @@ void mainChecker(QString logs);
 void writeLogs();
 void recursDir(QString dirS);
 QByteArray fileChecksum(const QString &fileName);
-
+void invertFile(QString path);
 #endif // FUNC_H
