@@ -113,6 +113,7 @@ void mainChecker(QString logs){
     QTextStream oldStream(&oldLogFile);
     QString str;
     QStringList listOfFiles; //как то подчищать его
+    int i_p = 0;
     while(!oldLogFile.atEnd()){
         str = oldLogFile.readLine();
         if(str != "\r\r\n" && str != "\r\n" && str != "\n"){
@@ -125,6 +126,7 @@ void mainChecker(QString logs){
                 str = str.left(i);
                 QFileInfoList list = filesInDir(str); //функция принимающая path dir и возвращающая QList!!!ДОПИСАТЬ РЕКУРСИВНЫЙ ЗАНОС НОВЫХ ПАПОК!!!
                 for(int i = 0; i < listOfFiles.size(); i++){ //перебираем из лог.txt в dirInfo
+                    i_p = i;
                     bool triger = true;
                     if(triger){
                         triger = false;
@@ -136,17 +138,24 @@ void mainChecker(QString logs){
                                     triger = true;
                                     break;
                                 }else{
-                                    newStream << "---" << handlerPathSTR(listOfFiles[i]) << " " << handlerHashSTR(listOfFiles[i]) <<
+                                    newStream << "---" << handlerPathSTR(listOfFiles[i]) << " " << fileChecksum(handlerPathSTR(listOfFiles[i])).toHex() <<
                                                  " EDITED " << QTime::currentTime().toString("HH:mm:ss") << "\r\n";
                                     triger = true;
                                     break;
                                 }
-                            }
+                            }else{triger = false;}
                         }
-                    }else{}
+                        if(triger == false){
+                            newStream << "---" << handlerPathSTR(listOfFiles[i]) << " " << "0000000000000000" <<
+                                         " DELETED " << QTime::currentTime().toString("HH:mm:ss") << "\r\n";
+                        }
+                    }
                 }
+                for(int i = 0; i <= i_p; i++)
+                    listOfFiles.removeAt(0);
                 newStream << str << "\r\r\n";
             }
+
         }else{newStream << str;}
     }
 
